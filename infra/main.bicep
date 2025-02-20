@@ -2,8 +2,10 @@ param appName string
 param location string = resourceGroup().location
 param sku string = 'F1'
 
+var uniqueAppName = '${appName}-${uniqueString(resourceGroup().id)}'
+
 resource serverFarm 'Microsoft.Web/serverfarms@2023-01-01' = {
-  name: '${appName}-asp'
+  name: '${uniqueAppName}-asp'
   location: location
   sku: {
     name: sku
@@ -15,7 +17,7 @@ resource serverFarm 'Microsoft.Web/serverfarms@2023-01-01' = {
 }
 
 resource webApp 'Microsoft.Web/sites@2023-01-01' = {
-  name: appName
+  name: uniqueAppName
   location: location
   properties: {
     serverFarmId: serverFarm.id
