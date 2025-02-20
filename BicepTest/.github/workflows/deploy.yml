@@ -1,0 +1,56 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: ['main']
+
+env:
+  AZURE_RG: ${{ secrets.AZURE_RG }}  # Azure resource group name
+  APP_NAME: ${{ secrets.APP_NAME }}  # Name for your web app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 8 SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Build and publish
+      run: |
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+        dotnet publish --configuration Release --no-build --output publish
+
+    - name: Zip artifact
+      run: |
+        cd publish
+        zip -r ../webapp.zip *
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy Infrastructure (Bicep)
+      id: deployBicep
+      shell: bash
+      run: |
+        output=$(az deployment group create \
+          --resource-group ${{ env.AZURE_RG }} \
+          --template-file ./infra/main.bicep \
+          --parameters appName=${{ env.APP_NAME }} \
+          --query "properties.outputs.webAppName.value" \
+          --output tsv)
+        echo "webAppName=$output" >> $GITHUB_OUTPUT
+
+    - name: Deploy Application
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ steps.deployBicep.outputs.webAppName }}
+        package: ./webapp.zip
